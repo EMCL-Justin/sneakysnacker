@@ -151,7 +151,6 @@
 
       if (res.ok) {
         document.getElementById("name").value = "";
-        document.getElementById("realm").value = "";
         load();
       } else {
         alert((await res.json()).error);
@@ -182,9 +181,6 @@
     }
 
     document.getElementById("name").addEventListener("keydown", e => {
-      if (e.key === "Enter") document.getElementById("realm").focus();
-    });
-    document.getElementById("realm").addEventListener("keydown", e => {
       if (e.key === "Enter") addPlayer();
     });
 
