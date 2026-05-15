@@ -123,7 +123,10 @@ async function poll() {
 
         if (prev && prev.rating !== entry.rating) {
           console.log(`Activity: ${player.name} [${bracket}] ${prev.rating} → ${entry.rating}`);
-          await sendDiscordAlert(player, bracket, entry, prev);
+          const watchedBrackets = player.brackets ?? BRACKETS;
+          if (watchedBrackets.includes(bracket)) {
+            await sendDiscordAlert(player, bracket, entry, prev);
+          }
         }
 
         store.snapshots[key] = { ...entry, last_seen: new Date().toISOString() };
@@ -159,16 +162,18 @@ app.get("/api/players", (req, res) => {
 });
 
 app.post("/api/players", (req, res) => {
-  const { name, type = "target" } = req.body;
+  const { name, type = "target", brackets = ["2v2", "3v3", "5v5"] } = req.body;
   const realm_slug = "nightslayer";
   if (!name) return res.status(400).json({ error: "name required" });
   if (!["target", "avoid"].includes(type)) return res.status(400).json({ error: "type must be target or avoid" });
+  const validBrackets = brackets.filter(b => BRACKETS.includes(b));
+  if (!validBrackets.length) return res.status(400).json({ error: "at least one valid bracket required" });
   store = loadDb();
   const exists = store.players.find(
     (p) => p.name.toLowerCase() === name.toLowerCase() && p.realm_slug === realm_slug.toLowerCase()
   );
   if (exists) return res.status(409).json({ error: "Already watched" });
-  const player = { id: store.nextId++, name: name.trim(), realm_slug: realm_slug.trim().toLowerCase(), type, ping: false };
+  const player = { id: store.nextId++, name: name.trim(), realm_slug, type, brackets: validBrackets, ping: false };
   store.players.push(player);
   saveDb(store);
   res.json(player);
@@ -180,6 +185,10 @@ app.patch("/api/players/:id", (req, res) => {
   const player = store.players.find((p) => p.id === id);
   if (!player) return res.status(404).json({ error: "Not found" });
   if (req.body.ping !== undefined) player.ping = !!req.body.ping;
+  if (req.body.brackets !== undefined) {
+    const valid = req.body.brackets.filter(b => BRACKETS.includes(b));
+    if (valid.length) player.brackets = valid;
+  }
   saveDb(store);
   res.json(player);
 });

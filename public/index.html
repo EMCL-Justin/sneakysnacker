@@ -52,6 +52,8 @@
     .last-seen { color: #444; font-size: 0.8rem; }
     .last-seen.active { color: #2ecc71; }
     .empty  { color: #333; padding: 24px 12px; }
+    .check-label { color: #888; font-size: 0.85rem; display: flex; align-items: center; gap: 4px; cursor: pointer; white-space: nowrap; }
+    .check-label input { accent-color: #c79c6e; cursor: pointer; }
     .status { color: #333; font-size: 0.75rem; margin-top: 24px; }
   </style>
 </head>
@@ -65,6 +67,9 @@
       <option value="target">🎯 Target</option>
       <option value="avoid">⚠️ Avoid</option>
     </select>
+    <label class="check-label"><input type="checkbox" id="b2v2" checked /> 2v2</label>
+    <label class="check-label"><input type="checkbox" id="b3v3" checked /> 3v3</label>
+    <label class="check-label"><input type="checkbox" id="b5v5" checked /> 5v5</label>
     <button onclick="addPlayer()">Watch</button>
   </div>
 
@@ -73,7 +78,7 @@
       <tr>
         <th>Player</th>
         <th>Type</th>
-        <th>Brackets seen</th>
+        <th>Alert on</th>
         <th>Recent rating</th>
         <th>Last activity</th>
         <th>@here</th>
@@ -99,16 +104,22 @@
         return;
       }
 
+      players.forEach(p => playerCache[p.id] = p);
       tbody.innerHTML = players.map(p => {
         const typeTag = p.type === "avoid"
           ? `<span class="type-tag type-avoid">AVOID</span>`
           : `<span class="type-tag type-target">TARGET</span>`;
 
+        const watchedBrackets = p.brackets ?? ["2v2","3v3","5v5"];
         const brackets = ["5v5", "3v3", "2v2"].map(b => {
           const snap = p.bracketData?.[b];
-          const cls = snap ? `bracket-pill active-${b}` : "bracket-pill";
+          const active = watchedBrackets.includes(b);
+          const cls = snap && active ? `bracket-pill active-${b}` : "bracket-pill";
           const label = snap ? `${b} · ${snap.rating}` : b;
-          return `<span class="${cls}">${label}</span>`;
+          return `<label class="${cls}" style="cursor:pointer;user-select:none">
+            <input type="checkbox" ${active ? "checked" : ""} style="display:none"
+              onchange="toggleBracket(${p.id}, '${b}', this.checked)" />
+            ${label}</label>`;
         }).join("");
 
         const allSnaps = ["5v5","3v3","2v2"].map(b => p.bracketData?.[b]).filter(Boolean);
@@ -141,12 +152,13 @@
     async function addPlayer() {
       const name = document.getElementById("name").value.trim();
       const type = document.getElementById("type").value;
-      if (!name) return;
+      const brackets = ["2v2","3v3","5v5"].filter(b => document.getElementById("b"+b).checked);
+      if (!name || !brackets.length) return;
 
       const res = await fetch("/api/players", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, type }),
+        body: JSON.stringify({ name, type, brackets }),
       });
 
       if (res.ok) {
@@ -155,6 +167,20 @@
       } else {
         alert((await res.json()).error);
       }
+    }
+
+    let playerCache = {};
+
+    async function toggleBracket(id, bracket, enabled) {
+      const current = playerCache[id]?.brackets ?? ["2v2","3v3","5v5"];
+      const updated = enabled ? [...new Set([...current, bracket])] : current.filter(b => b !== bracket);
+      if (!updated.length) return;
+      await fetch(`/api/players/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brackets: updated }),
+      });
+      if (playerCache[id]) playerCache[id].brackets = updated;
     }
 
     async function togglePing(id, enabled) {
