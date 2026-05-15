@@ -77,6 +77,7 @@
         <th>Brackets seen</th>
         <th>Best rating</th>
         <th>Last activity</th>
+        <th>@here</th>
         <th></th>
       </tr>
     </thead>
@@ -126,6 +127,10 @@
             <td><div class="brackets">${brackets}</div></td>
             <td class="rating">${p.rating ?? "—"}</td>
             <td class="last-seen ${recentlyActive ? "active" : ""}">${lastSeen}</td>
+            <td>
+              <input type="checkbox" ${p.ping ? "checked" : ""}
+                onchange="togglePing(${p.id}, this.checked)" title="@here ping on alert" />
+            </td>
             <td><button class="remove" onclick="remove(${p.id})">remove</button></td>
           </tr>`;
       }).join("");
@@ -153,6 +158,14 @@
       } else {
         alert((await res.json()).error);
       }
+    }
+
+    async function togglePing(id, enabled) {
+      await fetch(`/api/players/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ping: enabled }),
+      });
     }
 
     async function remove(id) {

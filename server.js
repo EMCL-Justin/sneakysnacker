@@ -95,7 +95,7 @@ async function sendDiscordAlert(player, bracket, current, previous) {
   await fetch(DISCORD_WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ embeds: [embed] }),
+    body: JSON.stringify({ content: player.ping ? "@here" : undefined, embeds: [embed] }),
   });
 }
 
@@ -165,8 +165,18 @@ app.post("/api/players", (req, res) => {
     (p) => p.name.toLowerCase() === name.toLowerCase() && p.realm_slug === realm_slug.toLowerCase()
   );
   if (exists) return res.status(409).json({ error: "Already watched" });
-  const player = { id: store.nextId++, name: name.trim(), realm_slug: realm_slug.trim().toLowerCase(), type };
+  const player = { id: store.nextId++, name: name.trim(), realm_slug: realm_slug.trim().toLowerCase(), type, ping: false };
   store.players.push(player);
+  saveDb(store);
+  res.json(player);
+});
+
+app.patch("/api/players/:id", (req, res) => {
+  store = loadDb();
+  const id = parseInt(req.params.id);
+  const player = store.players.find((p) => p.id === id);
+  if (!player) return res.status(404).json({ error: "Not found" });
+  if (req.body.ping !== undefined) player.ping = !!req.body.ping;
   saveDb(store);
   res.json(player);
 });
