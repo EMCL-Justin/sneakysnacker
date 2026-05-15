@@ -12,8 +12,11 @@ const DB_FILE = process.env.DB_FILE || "db.json";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
 
-const XUNAMATE_URL =
-  "https://anniversary.xunamate.gg/leaderboard/3v3/__data.json?region=us&x-sveltekit-invalidated=11";
+const BRACKETS = ["2v2", "3v3", "5v5"];
+
+function xunamateUrl(bracket) {
+  return `https://anniversary.xunamate.gg/leaderboard/${bracket}/__data.json?region=us&x-sveltekit-invalidated=11`;
+}
 
 // ── JSON store ────────────────────────────────────────────────────────────────
 
@@ -28,15 +31,12 @@ function saveDb(data) {
 
 let store = loadDb();
 
-// ── Xunamate leaderboard fetch ────────────────────────────────────────────────
+// ── Xunamate fetch ────────────────────────────────────────────────────────────
 
-// Xunamate uses SvelteKit's deduplication format: a flat array where objects
-// store field values as indices into that array rather than inline.
 function decodeXunamate(json) {
   const flat = json.nodes[1].data;
-  const root = flat[0]; // { meta, entries, season }
+  const root = flat[0];
   const entryIndices = flat[root.entries];
-
   return entryIndices.map((idx) => {
     const e = flat[idx];
     return {
@@ -49,28 +49,52 @@ function decodeXunamate(json) {
   });
 }
 
-async function fetchLeaderboard() {
-  const res = await fetch(XUNAMATE_URL, {
+const leaderboardCache = {};
+
+async function fetchLeaderboard(bracket) {
+  const res = await fetch(xunamateUrl(bracket), {
     headers: { "User-Agent": "arena-tracker/1.0" },
   });
-  if (!res.ok) throw new Error(`Xunamate fetch failed: ${res.status}`);
-  return decodeXunamate(await res.json());
+  if (!res.ok) throw new Error(`Xunamate ${bracket} fetch failed: ${res.status}`);
+  const entries = decodeXunamate(await res.json());
+  leaderboardCache[bracket] = entries;
+  return entries;
 }
 
 // ── Discord ───────────────────────────────────────────────────────────────────
 
+function hexToInt(hex) {
+  return parseInt(hex.replace("#", ""), 16);
+}
+
 async function sendDiscordAlert(player, current, previous) {
   if (!DISCORD_WEBHOOK_URL) return;
+
   const diff = current.rating - previous.rating;
   const sign = diff >= 0 ? "+" : "";
+  const went_up = diff >= 0;
+
+  // Custom color > auto green/red
+  const color = player.color
+    ? hexToInt(player.color)
+    : went_up ? 0x2ecc71 : 0xe74c3c;
+
+  const embed = {
+    title: `${player.name} — ${(player.bracket || "3v3").toUpperCase()}`,
+    color,
+    fields: [
+      { name: "Rating", value: `**${current.rating}** (${sign}${diff})`, inline: true },
+      { name: "Rank", value: `#${current.rank}`, inline: true },
+      { name: "Realm", value: player.realm_slug, inline: true },
+    ],
+    timestamp: new Date().toISOString(),
+    footer: { text: "sneakysnacker" },
+  };
+
   await fetch(DISCORD_WEBHOOK_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      content:
-        `🏟️ **${player.name}-${player.realm_slug}** just played 3v3\n` +
-        `Rating: **${current.rating}** (${sign}${diff}) · Rank #${current.rank}`,
-    }),
+    body: JSON.stringify({ embeds: [embed] }),
   });
 }
 
@@ -78,10 +102,18 @@ async function sendDiscordAlert(player, current, previous) {
 
 async function poll() {
   try {
-    const entries = await fetchLeaderboard();
     store = loadDb();
 
+    // Only fetch brackets we're actually watching
+    const activeBrackets = [...new Set(store.players.map((p) => p.bracket || "3v3"))];
+    const results = {};
+    for (const bracket of activeBrackets) {
+      results[bracket] = await fetchLeaderboard(bracket);
+    }
+
     for (const player of store.players) {
+      const bracket = player.bracket || "3v3";
+      const entries = results[bracket] ?? [];
       const entry = entries.find(
         (e) =>
           e.name.toLowerCase() === player.name.toLowerCase() &&
@@ -89,13 +121,14 @@ async function poll() {
       );
       if (!entry) continue;
 
-      const prev = store.snapshots[player.id];
+      const snapshotKey = `${player.id}`;
+      const prev = store.snapshots[snapshotKey];
       if (prev && prev.rating !== entry.rating) {
-        console.log(`Activity: ${player.name} ${prev.rating} → ${entry.rating}`);
+        console.log(`Activity: ${player.name} [${bracket}] ${prev.rating} → ${entry.rating}`);
         await sendDiscordAlert(player, entry, prev);
       }
 
-      store.snapshots[player.id] = { ...entry, last_seen: new Date().toISOString() };
+      store.snapshots[snapshotKey] = { ...entry, last_seen: new Date().toISOString() };
     }
 
     saveDb(store);
@@ -118,15 +151,32 @@ app.get("/api/players", (req, res) => {
 });
 
 app.post("/api/players", (req, res) => {
-  const { name, realm_slug } = req.body;
+  const { name, realm_slug, bracket = "3v3", color } = req.body;
   if (!name || !realm_slug) return res.status(400).json({ error: "name and realm_slug required" });
+  if (!BRACKETS.includes(bracket)) return res.status(400).json({ error: "bracket must be 2v2, 3v3, or 5v5" });
   store = loadDb();
   const exists = store.players.find(
-    (p) => p.name.toLowerCase() === name.toLowerCase() && p.realm_slug === realm_slug.toLowerCase()
+    (p) => p.name.toLowerCase() === name.toLowerCase() && p.realm_slug === realm_slug.toLowerCase() && p.bracket === bracket
   );
   if (exists) return res.status(409).json({ error: "Already watched" });
-  const player = { id: store.nextId++, name: name.trim(), realm_slug: realm_slug.trim().toLowerCase() };
+  const player = {
+    id: store.nextId++,
+    name: name.trim(),
+    realm_slug: realm_slug.trim().toLowerCase(),
+    bracket,
+    color: color || null,
+  };
   store.players.push(player);
+  saveDb(store);
+  res.json(player);
+});
+
+app.patch("/api/players/:id", (req, res) => {
+  store = loadDb();
+  const id = parseInt(req.params.id);
+  const player = store.players.find((p) => p.id === id);
+  if (!player) return res.status(404).json({ error: "Not found" });
+  if (req.body.color !== undefined) player.color = req.body.color || null;
   saveDb(store);
   res.json(player);
 });
