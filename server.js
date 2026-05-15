@@ -86,7 +86,6 @@ async function sendDiscordAlert(player, bracket, current, previous) {
     fields: [
       { name: "Rating", value: `**${current.rating}** (${sign}${diff})`, inline: true },
       { name: "Rank", value: `#${current.rank}`, inline: true },
-      { name: "Realm", value: player.realm_slug, inline: true },
     ],
     timestamp: new Date().toISOString(),
     footer: { text: "sneakysnacker" },
@@ -157,8 +156,9 @@ app.get("/api/players", (req, res) => {
 });
 
 app.post("/api/players", (req, res) => {
-  const { name, realm_slug, type = "target" } = req.body;
-  if (!name || !realm_slug) return res.status(400).json({ error: "name and realm_slug required" });
+  const { name, type = "target" } = req.body;
+  const realm_slug = "nightslayer";
+  if (!name) return res.status(400).json({ error: "name required" });
   if (!["target", "avoid"].includes(type)) return res.status(400).json({ error: "type must be target or avoid" });
   store = loadDb();
   const exists = store.players.find(

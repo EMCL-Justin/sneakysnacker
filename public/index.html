@@ -60,8 +60,7 @@
   <p class="sub">Pings Discord when a watched player's rating changes — all brackets</p>
 
   <div class="add-form">
-    <input id="name"  class="name-input"  placeholder="Character name" />
-    <input id="realm" class="realm-input" placeholder="Realm (e.g. nightslayer)" />
+    <input id="name" class="name-input" placeholder="Character name" />
     <select id="type">
       <option value="target">🎯 Target</option>
       <option value="avoid">⚠️ Avoid</option>
@@ -121,7 +120,7 @@
         return `
           <tr>
             <td>
-              ${p.name}<span class="realm"> — ${p.realm_slug}</span>
+              ${p.name}
             </td>
             <td>${typeTag}</td>
             <td><div class="brackets">${brackets}</div></td>
@@ -140,15 +139,14 @@
     }
 
     async function addPlayer() {
-      const name  = document.getElementById("name").value.trim();
-      const realm = document.getElementById("realm").value.trim().toLowerCase();
-      const type  = document.getElementById("type").value;
-      if (!name || !realm) return;
+      const name = document.getElementById("name").value.trim();
+      const type = document.getElementById("type").value;
+      if (!name) return;
 
       const res = await fetch("/api/players", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, realm_slug: realm, type }),
+        body: JSON.stringify({ name, type }),
       });
 
       if (res.ok) {
