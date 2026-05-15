@@ -9,62 +9,63 @@
     body { background: #0e0e12; color: #e0e0e0; font-family: monospace; padding: 24px; }
     h1 { color: #c79c6e; margin-bottom: 4px; font-size: 1.2rem; }
     .sub { color: #666; font-size: 0.8rem; margin-bottom: 24px; }
-    .add-form { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .add-form { display: flex; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; align-items: center; }
     input, select {
       background: #1a1a22; border: 1px solid #333; color: #e0e0e0;
-      padding: 8px 12px; font-family: monospace; font-size: 0.9rem;
-      border-radius: 4px;
+      padding: 8px 12px; font-family: monospace; font-size: 0.9rem; border-radius: 4px;
     }
     input::placeholder { color: #555; }
-    input[type="color"] {
-      padding: 2px 4px; width: 42px; height: 36px; cursor: pointer; border-radius: 4px;
-    }
-    .name-input { flex: 2; min-width: 120px; }
-    .realm-input { flex: 2; min-width: 120px; }
-    select { flex: 1; min-width: 80px; }
+    .name-input { flex: 2; min-width: 130px; }
+    .realm-input { flex: 2; min-width: 130px; }
+    select { flex: 1; min-width: 90px; }
     button {
       background: #c79c6e; color: #0e0e12; border: none; padding: 8px 16px;
       font-family: monospace; font-weight: bold; cursor: pointer; border-radius: 4px;
-      white-space: nowrap;
     }
     button:hover { background: #d4a96e; }
-    button.remove { background: #333; color: #999; font-size: 0.8rem; padding: 4px 10px; }
-    button.remove:hover { background: #c0392b; color: #fff; }
+    button.remove { background: #222; color: #666; font-size: 0.8rem; padding: 4px 10px; border: 1px solid #333; }
+    button.remove:hover { background: #c0392b; color: #fff; border-color: #c0392b; }
+
     table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
-    th { text-align: left; color: #666; padding: 6px 12px; border-bottom: 1px solid #222; }
-    td { padding: 10px 12px; border-bottom: 1px solid #1a1a22; vertical-align: middle; }
-    tr:hover td { background: #13131a; }
+    th { text-align: left; color: #555; padding: 6px 12px; border-bottom: 1px solid #1a1a22; font-weight: normal; }
+    td { padding: 10px 12px; border-bottom: 1px solid #161619; vertical-align: middle; }
+    tr:hover td { background: #111116; }
+
+    .type-tag {
+      display: inline-block; font-size: 0.7rem; font-weight: bold;
+      padding: 2px 7px; border-radius: 3px; letter-spacing: 0.05em;
+    }
+    .type-target { background: #1a2e1a; color: #2ecc71; }
+    .type-avoid  { background: #2e1a1a; color: #e74c3c; }
+
+    .brackets { display: flex; gap: 4px; flex-wrap: wrap; }
+    .bracket-pill {
+      font-size: 0.72rem; padding: 2px 7px; border-radius: 3px;
+      background: #1a1a22; color: #666; border: 1px solid #2a2a33;
+    }
+    .bracket-pill.active-5v5 { background: #2e2a12; color: #f1c40f; border-color: #4a4218; }
+    .bracket-pill.active-3v3 { background: #122e18; color: #2ecc71; border-color: #1a4a24; }
+    .bracket-pill.active-2v2 { background: #1a1a22; color: #888;    border-color: #2a2a33; }
+
     .rating { color: #c79c6e; font-weight: bold; }
-    .realm { color: #888; font-size: 0.8rem; }
-    .bracket { color: #555; font-size: 0.75rem; background: #1a1a22; padding: 2px 6px; border-radius: 3px; }
-    .last-seen { color: #555; font-size: 0.8rem; }
-    .active { color: #2ecc71; }
-    .empty { color: #444; padding: 24px 12px; }
-    .status { color: #444; font-size: 0.75rem; margin-top: 24px; }
-    .color-dot {
-      width: 10px; height: 10px; border-radius: 50%; display: inline-block;
-      margin-right: 6px; vertical-align: middle; border: 1px solid #333;
-    }
-    .color-cell { display: flex; align-items: center; gap: 6px; }
-    input[type="color"].inline {
-      width: 24px; height: 24px; padding: 1px 2px; cursor: pointer;
-      border-radius: 3px; flex-shrink: 0;
-    }
+    .realm  { color: #666; font-size: 0.8rem; }
+    .last-seen { color: #444; font-size: 0.8rem; }
+    .last-seen.active { color: #2ecc71; }
+    .empty  { color: #333; padding: 24px 12px; }
+    .status { color: #333; font-size: 0.75rem; margin-top: 24px; }
   </style>
 </head>
 <body>
   <h1>Arena Tracker</h1>
-  <p class="sub">Pings Discord when a watched player's rating changes</p>
+  <p class="sub">Pings Discord when a watched player's rating changes — all brackets</p>
 
   <div class="add-form">
-    <input id="name" class="name-input" placeholder="Character name" />
+    <input id="name"  class="name-input"  placeholder="Character name" />
     <input id="realm" class="realm-input" placeholder="Realm (e.g. nightslayer)" />
-    <select id="bracket">
-      <option value="3v3">3v3</option>
-      <option value="2v2">2v2</option>
-      <option value="5v5">5v5</option>
+    <select id="type">
+      <option value="target">🎯 Target</option>
+      <option value="avoid">⚠️ Avoid</option>
     </select>
-    <input type="color" id="color" value="#c79c6e" title="Alert color in Discord" />
     <button onclick="addPlayer()">Watch</button>
   </div>
 
@@ -72,11 +73,10 @@
     <thead>
       <tr>
         <th>Player</th>
-        <th>Bracket</th>
-        <th>Rating</th>
-        <th>Rank</th>
+        <th>Type</th>
+        <th>Brackets seen</th>
+        <th>Best rating</th>
         <th>Last activity</th>
-        <th>Color</th>
         <th></th>
       </tr>
     </thead>
@@ -94,46 +94,56 @@
 
       const tbody = document.getElementById("players");
       if (!players.length) {
-        tbody.innerHTML = `<tr><td colspan="7" class="empty">No players watched yet.</td></tr>`;
-      } else {
-        tbody.innerHTML = players.map(p => {
-          const lastSeen = p.last_seen ? timeAgo(p.last_seen) : "never seen";
-          const recentlyActive = p.last_seen && (Date.now() - new Date(p.last_seen)) < 5 * 60 * 1000;
-          const color = p.color || "#c79c6e";
-          return `
-            <tr>
-              <td>
-                <span>${p.name}</span>
-                <span class="realm"> — ${p.realm_slug}</span>
-              </td>
-              <td><span class="bracket">${p.bracket || "3v3"}</span></td>
-              <td class="rating">${p.rating ?? "—"}</td>
-              <td>${p.rank ? "#" + p.rank : "—"}</td>
-              <td class="last-seen ${recentlyActive ? "active" : ""}">${lastSeen}</td>
-              <td class="color-cell">
-                <input type="color" class="inline" value="${color}"
-                  onchange="updateColor(${p.id}, this.value)" title="Discord alert color" />
-              </td>
-              <td><button class="remove" onclick="remove(${p.id})">remove</button></td>
-            </tr>`;
-        }).join("");
+        tbody.innerHTML = `<tr><td colspan="6" class="empty">No players watched yet.</td></tr>`;
+        document.getElementById("status").textContent = `source: xunamate · polling every ${status.pollIntervalMinutes}min`;
+        return;
       }
+
+      tbody.innerHTML = players.map(p => {
+        const typeTag = p.type === "avoid"
+          ? `<span class="type-tag type-avoid">AVOID</span>`
+          : `<span class="type-tag type-target">TARGET</span>`;
+
+        const brackets = ["5v5", "3v3", "2v2"].map(b => {
+          const snap = p.bracketData?.[b];
+          const cls = snap ? `bracket-pill active-${b}` : "bracket-pill";
+          const label = snap ? `${b} · ${snap.rating}` : b;
+          return `<span class="${cls}">${label}</span>`;
+        }).join("");
+
+        const allSnaps = ["5v5","3v3","2v2"].map(b => p.bracketData?.[b]).filter(Boolean);
+        const lastSeen = allSnaps.length
+          ? timeAgo(allSnaps.sort((a,b) => new Date(b.last_seen)-new Date(a.last_seen))[0].last_seen)
+          : "never seen";
+        const recentlyActive = allSnaps.some(s => Date.now() - new Date(s.last_seen) < 5 * 60 * 1000);
+
+        return `
+          <tr>
+            <td>
+              ${p.name}<span class="realm"> — ${p.realm_slug}</span>
+            </td>
+            <td>${typeTag}</td>
+            <td><div class="brackets">${brackets}</div></td>
+            <td class="rating">${p.rating ?? "—"}</td>
+            <td class="last-seen ${recentlyActive ? "active" : ""}">${lastSeen}</td>
+            <td><button class="remove" onclick="remove(${p.id})">remove</button></td>
+          </tr>`;
+      }).join("");
 
       document.getElementById("status").textContent =
         `source: xunamate · polling every ${status.pollIntervalMinutes}min · ${status.watchedCount} watched`;
     }
 
     async function addPlayer() {
-      const name = document.getElementById("name").value.trim();
+      const name  = document.getElementById("name").value.trim();
       const realm = document.getElementById("realm").value.trim().toLowerCase();
-      const bracket = document.getElementById("bracket").value;
-      const color = document.getElementById("color").value;
+      const type  = document.getElementById("type").value;
       if (!name || !realm) return;
 
       const res = await fetch("/api/players", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, realm_slug: realm, bracket, color }),
+        body: JSON.stringify({ name, realm_slug: realm, type }),
       });
 
       if (res.ok) {
@@ -141,17 +151,8 @@
         document.getElementById("realm").value = "";
         load();
       } else {
-        const err = await res.json();
-        alert(err.error);
+        alert((await res.json()).error);
       }
-    }
-
-    async function updateColor(id, color) {
-      await fetch(`/api/players/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ color }),
-      });
     }
 
     async function remove(id) {

@@ -11,7 +11,6 @@ const PORT = process.env.PORT || 3000;
 const DB_FILE = process.env.DB_FILE || "db.json";
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const POLL_INTERVAL_MS = 2 * 60 * 1000;
-
 const BRACKETS = ["2v2", "3v3", "5v5"];
 
 function xunamateUrl(bracket) {
@@ -44,43 +43,45 @@ function decodeXunamate(json) {
       realm: flat[e.realm],
       rating: flat[e.rating],
       rank: flat[e.rank],
-      weeklyRatingDelta: flat[e.weeklyRatingDelta] ?? 0,
     };
   });
 }
 
-const leaderboardCache = {};
-
-async function fetchLeaderboard(bracket) {
-  const res = await fetch(xunamateUrl(bracket), {
-    headers: { "User-Agent": "arena-tracker/1.0" },
-  });
-  if (!res.ok) throw new Error(`Xunamate ${bracket} fetch failed: ${res.status}`);
-  const entries = decodeXunamate(await res.json());
-  leaderboardCache[bracket] = entries;
-  return entries;
+async function fetchAllBrackets() {
+  const results = {};
+  await Promise.all(
+    BRACKETS.map(async (bracket) => {
+      const res = await fetch(xunamateUrl(bracket), {
+        headers: { "User-Agent": "arena-tracker/1.0" },
+      });
+      if (!res.ok) throw new Error(`Xunamate ${bracket} fetch failed: ${res.status}`);
+      results[bracket] = decodeXunamate(await res.json());
+    })
+  );
+  return results;
 }
 
 // ── Discord ───────────────────────────────────────────────────────────────────
 
-function hexToInt(hex) {
-  return parseInt(hex.replace("#", ""), 16);
+function embedConfig(type, bracket) {
+  if (type === "avoid") {
+    return { color: 0xe74c3c, title: `⚠️ AVOID — playing ${bracket.toUpperCase()}` };
+  }
+  // target
+  if (bracket === "5v5") return { color: 0xf1c40f, title: `🔥 Queue up — playing 5v5` };
+  if (bracket === "3v3") return { color: 0x2ecc71, title: `✅ Playing 3v3` };
+  return { color: 0x555555, title: `Playing 2v2 (low priority)` };
 }
 
-async function sendDiscordAlert(player, current, previous) {
+async function sendDiscordAlert(player, bracket, current, previous) {
   if (!DISCORD_WEBHOOK_URL) return;
 
   const diff = current.rating - previous.rating;
   const sign = diff >= 0 ? "+" : "";
-  const went_up = diff >= 0;
-
-  // Custom color > auto green/red
-  const color = player.color
-    ? hexToInt(player.color)
-    : went_up ? 0x2ecc71 : 0xe74c3c;
+  const { color, title } = embedConfig(player.type || "target", bracket);
 
   const embed = {
-    title: `${player.name} — ${(player.bracket || "3v3").toUpperCase()}`,
+    title: `${player.name} — ${title}`,
     color,
     fields: [
       { name: "Rating", value: `**${current.rating}** (${sign}${diff})`, inline: true },
@@ -102,33 +103,29 @@ async function sendDiscordAlert(player, current, previous) {
 
 async function poll() {
   try {
+    const leaderboards = await fetchAllBrackets();
     store = loadDb();
 
-    // Only fetch brackets we're actually watching
-    const activeBrackets = [...new Set(store.players.map((p) => p.bracket || "3v3"))];
-    const results = {};
-    for (const bracket of activeBrackets) {
-      results[bracket] = await fetchLeaderboard(bracket);
-    }
-
     for (const player of store.players) {
-      const bracket = player.bracket || "3v3";
-      const entries = results[bracket] ?? [];
-      const entry = entries.find(
-        (e) =>
-          e.name.toLowerCase() === player.name.toLowerCase() &&
-          e.realm === player.realm_slug
-      );
-      if (!entry) continue;
+      for (const bracket of BRACKETS) {
+        const entries = leaderboards[bracket];
+        const entry = entries.find(
+          (e) =>
+            e.name.toLowerCase() === player.name.toLowerCase() &&
+            e.realm === player.realm_slug
+        );
+        if (!entry) continue;
 
-      const snapshotKey = `${player.id}`;
-      const prev = store.snapshots[snapshotKey];
-      if (prev && prev.rating !== entry.rating) {
-        console.log(`Activity: ${player.name} [${bracket}] ${prev.rating} → ${entry.rating}`);
-        await sendDiscordAlert(player, entry, prev);
+        const key = `${player.id}-${bracket}`;
+        const prev = store.snapshots[key];
+
+        if (prev && prev.rating !== entry.rating) {
+          console.log(`Activity: ${player.name} [${bracket}] ${prev.rating} → ${entry.rating}`);
+          await sendDiscordAlert(player, bracket, entry, prev);
+        }
+
+        store.snapshots[key] = { ...entry, last_seen: new Date().toISOString() };
       }
-
-      store.snapshots[snapshotKey] = { ...entry, last_seen: new Date().toISOString() };
     }
 
     saveDb(store);
@@ -145,38 +142,31 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/players", (req, res) => {
   store = loadDb();
-  const result = store.players.map((p) => ({ ...p, ...store.snapshots[p.id] }));
+  // Attach highest bracket rating for display
+  const result = store.players.map((p) => {
+    const bracketData = {};
+    for (const b of BRACKETS) {
+      const snap = store.snapshots[`${p.id}-${b}`];
+      if (snap) bracketData[b] = snap;
+    }
+    const best = ["5v5", "3v3", "2v2"].map(b => bracketData[b]).find(Boolean);
+    return { ...p, bracketData, rating: best?.rating, rank: best?.rank, last_seen: best?.last_seen };
+  });
   result.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
   res.json(result);
 });
 
 app.post("/api/players", (req, res) => {
-  const { name, realm_slug, bracket = "3v3", color } = req.body;
+  const { name, realm_slug, type = "target" } = req.body;
   if (!name || !realm_slug) return res.status(400).json({ error: "name and realm_slug required" });
-  if (!BRACKETS.includes(bracket)) return res.status(400).json({ error: "bracket must be 2v2, 3v3, or 5v5" });
+  if (!["target", "avoid"].includes(type)) return res.status(400).json({ error: "type must be target or avoid" });
   store = loadDb();
   const exists = store.players.find(
-    (p) => p.name.toLowerCase() === name.toLowerCase() && p.realm_slug === realm_slug.toLowerCase() && p.bracket === bracket
+    (p) => p.name.toLowerCase() === name.toLowerCase() && p.realm_slug === realm_slug.toLowerCase()
   );
   if (exists) return res.status(409).json({ error: "Already watched" });
-  const player = {
-    id: store.nextId++,
-    name: name.trim(),
-    realm_slug: realm_slug.trim().toLowerCase(),
-    bracket,
-    color: color || null,
-  };
+  const player = { id: store.nextId++, name: name.trim(), realm_slug: realm_slug.trim().toLowerCase(), type };
   store.players.push(player);
-  saveDb(store);
-  res.json(player);
-});
-
-app.patch("/api/players/:id", (req, res) => {
-  store = loadDb();
-  const id = parseInt(req.params.id);
-  const player = store.players.find((p) => p.id === id);
-  if (!player) return res.status(404).json({ error: "Not found" });
-  if (req.body.color !== undefined) player.color = req.body.color || null;
   saveDb(store);
   res.json(player);
 });
@@ -185,7 +175,7 @@ app.delete("/api/players/:id", (req, res) => {
   store = loadDb();
   const id = parseInt(req.params.id);
   store.players = store.players.filter((p) => p.id !== id);
-  delete store.snapshots[id];
+  for (const b of BRACKETS) delete store.snapshots[`${id}-${b}`];
   saveDb(store);
   res.json({ ok: true });
 });
