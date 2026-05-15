@@ -65,15 +65,9 @@ async function fetchAllBrackets() {
 
 function embedConfig(type, bracket) {
   if (type === "avoid") {
-    return {
-      color: 0xe74c3c,
-      title: `⚠️ ${bracket.toUpperCase()} — Be careful queueing!`,
-    };
+    return { color: 0xe74c3c, title: `⚠️ ${bracket.toUpperCase()} — Be careful queueing!` };
   }
-  // target
-  if (bracket === "5v5") return { color: 0xf1c40f, title: `🔥 5v5 — GOGOGO queue now!` };
-  if (bracket === "3v3") return { color: 0x2ecc71, title: `✅ 3v3 — GOGOGO queue now!` };
-  return { color: 0x555555, title: `2v2 — GOGOGO queue now! (low priority)` };
+  return { color: 0x2ecc71, title: `✅ ${bracket.toUpperCase()} — GOGOGO queue now!` };
 }
 
 async function sendDiscordAlert(player, bracket, current, previous) {
