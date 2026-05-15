@@ -65,12 +65,15 @@ async function fetchAllBrackets() {
 
 function embedConfig(type, bracket) {
   if (type === "avoid") {
-    return { color: 0xe74c3c, title: `⚠️ AVOID — playing ${bracket.toUpperCase()}` };
+    return {
+      color: 0xe74c3c,
+      title: `⚠️ ${bracket.toUpperCase()} — Be careful queueing!`,
+    };
   }
   // target
-  if (bracket === "5v5") return { color: 0xf1c40f, title: `🔥 Queue up — playing 5v5` };
-  if (bracket === "3v3") return { color: 0x2ecc71, title: `✅ Playing 3v3` };
-  return { color: 0x555555, title: `Playing 2v2 (low priority)` };
+  if (bracket === "5v5") return { color: 0xf1c40f, title: `🔥 5v5 — GOGOGO queue now!` };
+  if (bracket === "3v3") return { color: 0x2ecc71, title: `✅ 3v3 — GOGOGO queue now!` };
+  return { color: 0x555555, title: `2v2 — GOGOGO queue now! (low priority)` };
 }
 
 async function sendDiscordAlert(player, bracket, current, previous) {
@@ -141,15 +144,15 @@ app.use(express.static(path.join(__dirname, "public")));
 
 app.get("/api/players", (req, res) => {
   store = loadDb();
-  // Attach highest bracket rating for display
   const result = store.players.map((p) => {
     const bracketData = {};
     for (const b of BRACKETS) {
       const snap = store.snapshots[`${p.id}-${b}`];
       if (snap) bracketData[b] = snap;
     }
-    const best = ["5v5", "3v3", "2v2"].map(b => bracketData[b]).find(Boolean);
-    return { ...p, bracketData, rating: best?.rating, rank: best?.rank, last_seen: best?.last_seen };
+    // Most recently active bracket
+    const recent = Object.values(bracketData).sort((a, b) => new Date(b.last_seen) - new Date(a.last_seen))[0];
+    return { ...p, bracketData, rating: recent?.rating, rank: recent?.rank, last_seen: recent?.last_seen };
   });
   result.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0));
   res.json(result);

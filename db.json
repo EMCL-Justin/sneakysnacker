@@ -4,6 +4,13 @@
       "id": 1,
       "name": "Laynerzx",
       "realm_slug": "nightslayer"
+    },
+    {
+      "id": 2,
+      "name": "Jozushka",
+      "realm_slug": "nightslayer",
+      "type": "target",
+      "ping": true
     }
   ],
   "snapshots": {
@@ -20,15 +27,29 @@
       "realm": "nightslayer",
       "rating": 2620,
       "rank": 1,
-      "last_seen": "2026-05-15T19:45:40.855Z"
+      "last_seen": "2026-05-15T19:50:17.313Z"
     },
     "1-5v5": {
       "name": "Laynerzx",
       "realm": "nightslayer",
       "rating": 2446,
       "rank": 1,
-      "last_seen": "2026-05-15T19:45:40.855Z"
+      "last_seen": "2026-05-15T19:50:17.313Z"
+    },
+    "2-3v3": {
+      "name": "Jozushka",
+      "realm": "nightslayer",
+      "rating": 2550,
+      "rank": 2,
+      "last_seen": "2026-05-15T19:50:17.313Z"
+    },
+    "2-5v5": {
+      "name": "Jozushka",
+      "realm": "nightslayer",
+      "rating": 2441,
+      "rank": 2,
+      "last_seen": "2026-05-15T19:50:17.313Z"
     }
   },
-  "nextId": 2
+  "nextId": 3
 }
