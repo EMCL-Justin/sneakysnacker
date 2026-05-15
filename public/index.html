@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Arena Tracker</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #0e0e12; color: #e0e0e0; font-family: monospace; padding: 24px; }
+    h1 { color: #c79c6e; margin-bottom: 4px; font-size: 1.2rem; }
+    .sub { color: #666; font-size: 0.8rem; margin-bottom: 24px; }
+    .add-form { display: flex; gap: 8px; margin-bottom: 24px; }
+    input {
+      background: #1a1a22; border: 1px solid #333; color: #e0e0e0;
+      padding: 8px 12px; font-family: monospace; font-size: 0.9rem;
+      border-radius: 4px; flex: 1;
+    }
+    input::placeholder { color: #555; }
+    button {
+      background: #c79c6e; color: #0e0e12; border: none; padding: 8px 16px;
+      font-family: monospace; font-weight: bold; cursor: pointer; border-radius: 4px;
+    }
+    button:hover { background: #d4a96e; }
+    button.remove { background: #333; color: #999; font-size: 0.8rem; padding: 4px 10px; }
+    button.remove:hover { background: #c0392b; color: #fff; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { text-align: left; color: #666; padding: 6px 12px; border-bottom: 1px solid #222; }
+    td { padding: 10px 12px; border-bottom: 1px solid #1a1a22; }
+    tr:hover td { background: #13131a; }
+    .rating { color: #c79c6e; font-weight: bold; }
+    .realm { color: #888; font-size: 0.8rem; }
+    .last-seen { color: #555; font-size: 0.8rem; }
+    .active { color: #2ecc71; }
+    .empty { color: #444; padding: 24px 12px; }
+    .status { color: #444; font-size: 0.75rem; margin-top: 24px; }
+  </style>
+</head>
+<body>
+  <h1>Arena Tracker</h1>
+  <p class="sub">Alerts you on Discord when a watched player's rating changes</p>
+
+  <div class="add-form">
+    <input id="name" placeholder="Character name" />
+    <input id="realm" placeholder="Realm slug (e.g. living-flame)" />
+    <button onclick="addPlayer()">Watch</button>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Player</th>
+        <th>Rating</th>
+        <th>W/L</th>
+        <th>Last activity</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="players"></tbody>
+  </table>
+
+  <p class="status" id="status"></p>
+
+  <script>
+    async function load() {
+      const [players, status] = await Promise.all([
+        fetch("/api/players").then(r => r.json()),
+        fetch("/api/status").then(r => r.json()),
+      ]);
+
+      const tbody = document.getElementById("players");
+      if (!players.length) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty">No players watched yet.</td></tr>`;
+      } else {
+        tbody.innerHTML = players.map(p => {
+          const lastSeen = p.last_seen ? timeAgo(p.last_seen) : "never seen";
+          const recentlyActive = p.last_seen && (Date.now() - new Date(p.last_seen)) < 5 * 60 * 1000;
+          return `
+            <tr>
+              <td>
+                <span>${p.name}</span>
+                <span class="realm"> — ${p.realm_slug}</span>
+              </td>
+              <td class="rating">${p.rating ?? "—"}</td>
+              <td>${p.wins ?? 0}/${p.losses ?? 0}</td>
+              <td class="last-seen ${recentlyActive ? "active" : ""}">${lastSeen}</td>
+              <td><button class="remove" onclick="remove(${p.id})">remove</button></td>
+            </tr>`;
+        }).join("");
+      }
+
+      document.getElementById("status").textContent =
+        `Season ${status.season ?? "?"} · polling every ${status.pollIntervalMinutes}min · ${status.watchedCount} watched`;
+    }
+
+    async function addPlayer() {
+      const name = document.getElementById("name").value.trim();
+      const realm = document.getElementById("realm").value.trim().toLowerCase();
+      if (!name || !realm) return;
+
+      const res = await fetch("/api/players", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, realm_slug: realm }),
+      });
+
+      if (res.ok) {
+        document.getElementById("name").value = "";
+        document.getElementById("realm").value = "";
+        load();
+      } else {
+        const err = await res.json();
+        alert(err.error);
+      }
+    }
+
+    async function remove(id) {
+      await fetch(`/api/players/${id}`, { method: "DELETE" });
+      load();
+    }
+
+    function timeAgo(iso) {
+      const diff = Date.now() - new Date(iso);
+      const m = Math.floor(diff / 60000);
+      if (m < 1) return "just now";
+      if (m < 60) return `${m}m ago`;
+      const h = Math.floor(m / 60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.floor(h / 24)}d ago`;
+    }
+
+    document.getElementById("name").addEventListener("keydown", e => {
+      if (e.key === "Enter") document.getElementById("realm").focus();
+    });
+    document.getElementById("realm").addEventListener("keydown", e => {
+      if (e.key === "Enter") addPlayer();
+    });
+
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>

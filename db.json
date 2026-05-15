@@ -1,0 +1,20 @@
+{
+  "players": [
+    {
+      "id": 1,
+      "name": "Laynerzx",
+      "realm_slug": "nightslayer"
+    }
+  ],
+  "snapshots": {
+    "1": {
+      "name": "Laynerzx",
+      "realm": "nightslayer",
+      "rating": 2620,
+      "rank": 1,
+      "weeklyRatingDelta": 0,
+      "last_seen": "2026-05-15T18:45:27.375Z"
+    }
+  },
+  "nextId": 2
+}
